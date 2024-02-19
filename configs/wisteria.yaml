@@ -1,0 +1,45 @@
+# Description: Configuration file for the Wisteria model
+# I just copied the pairwise.yaml file and made some changes to the hyperparameters.
+
+# Additional parameters
+gpu_id: "[0,1,2,3,4,5,6,7]"
+path: "/Users/lihongmin/Research/24 mRNAdegredation/RNAdegformer/src/OpenVaccine/data"
+epochs: 150
+batch_size: 96
+weight_decay: 0
+ntoken: 15
+nclass: 5
+ninp: 256
+nhead: 32
+nhid: 1024
+nlayers: 5
+save_freq: 10
+dropout: 0.1
+warmup_steps: 3200
+lr_scale: 0.0001
+optimizer: "adam"
+nmute: 18
+kmers: [5]
+kmer_aggregation: true
+nfolds: 5
+fold: 0
+val_freq: 1
+stride: 1
+viral_loss_weight: 1
+workers: 2
+error_beta: 5
+error_alpha: 0
+noise_filter: 0.25
+nlayers_predictor: 5
+wandb: true
+wandb_key: "819a6e3dfd3b388cf001cbca3eca46e7571df1c3"
+wandb_project: "rna_degredation_augmented"
+wandb_name: "RNAdegformer"
+wandb_tags: ["augmented", "RNAdegformer", "transformer", "kmer", "dynamic_cut", "augmented", "viral_loss", "weighted_MCRMSE"]
+wandb_entity: "lhongmin"
+cut_mask_for_rnadegformer: false
+
+data_dir: "/work/gs58/d58004/datasets/"
+openvaccine_data_dir: "/work/gs58/d58004/datasets/openvaccine/"
+ribonanza_data_dir: "/work/gs58/d58004/datasets/stanford-ribonanza-rna-folding/"
+gpu_id: "[0,1,2,3,4,5,6,7]"
