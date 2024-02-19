@@ -90,4 +90,6 @@ dependencies:
       - urllib3==2.1.0
       - webencodings==0.5.1
       - zipp==3.17.0
+      - polars
+      - matplotlib
 prefix: /home/shujun17/miniconda3/envs/torch

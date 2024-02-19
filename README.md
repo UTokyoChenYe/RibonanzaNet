@@ -17,13 +17,14 @@ https://www.kaggle.com/competitions/stanford-ribonanza-rna-folding/data
 ## Environment
 
 Create the environment from the environment file ```env.yml```
-
-```conda env create -f env.yml```
-
-Install ranger optimizer
-
+For my mac, I used the following command:
+```mamba env create -f env_mac.yml```
+```mamba activate torch```
+For linux, use the following command:
+```conda env create -f env_linux.yml```
 ```conda activate torch```
 
+Install ranger optimizer
 ```
 git clone https://github.com/lessw2020/Ranger-Deep-Learning-Optimizer
 cd Ranger-Deep-Learning-Optimizer
