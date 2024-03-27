@@ -18,7 +18,8 @@ from sklearn.metrics import mean_squared_error
 from accelerate import Accelerator
 import time
 import json
-
+from RNAdegformer_functions import *
+from accelerate import Accelerator
 
 tokens = 'ACGU().BEHIMSX'
 # eterna,'nupack','rnastructure','vienna_2','contrafold_2',
@@ -141,19 +142,76 @@ class RNADataset(Dataset):
         return sample
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--config_path', type=str, default="configs/pairwise.yaml")
+def train():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config_path', type=str, default="configs/MPR.yaml")
+    args = parser.parse_args()
+    config = load_config_from_yaml(args.config_path)
 
-args = parser.parse_args()
+    json_path = os.path.join(config.path, 'train.json')
+    json = pd.read_json(json_path, lines=True)
+    json = json[json.signal_to_noise > config.noise_filter]
+    ids = np.asarray(json.id.to_list())
 
-config = load_config_from_yaml(args.config_path)
-i = 0
-model = RibonanzaNet(config)  # .cuda()
-model.eval()
-model.load_state_dict(torch.load(f"models/model{i}.pt", map_location='cpu'))
-print("Model loaded")
+    error_weights = get_errors(json)
+    error_weights = config.error_alpha+np.exp(-error_weights*config.error_beta)
+    train_indices, val_indices = get_train_val_indices(json, config.fold, SEED=2020, nfolds=config.nfolds)
 
-n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print(f"Number of parameters: {n_params}")
+    _, labels = get_data(json)
+    sequences = np.asarray(json.sequence)
+    train_seqs = sequences[train_indices]
+    val_seqs = sequences[val_indices]
+    train_labels = labels[train_indices]
+    val_labels = labels[val_indices]
+    train_ids = ids[train_indices]
+    val_ids = ids[val_indices]
+    train_ew = error_weights[train_indices]
+    val_ew = error_weights[val_indices]
 
-print("finished!!")
+    dataset = RNADataset(train_seqs, train_labels, train_ids, train_ew, config.path)
+    val_dataset = RNADataset(val_seqs, val_labels, val_ids, val_ew, config.path)
+    train_loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True, num_workers=config.workers)
+    val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=config.workers)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = RibonanzaNet(config).to(device)
+    model.load_state_dict(torch.load(f"models/model0.pt", map_location='cpu'))
+    model = nn.DataParallel(model)
+
+    optimizer = Ranger(model.parameters(),weight_decay=config.weight_decay, lr=config.learning_rate)
+    criterion=weighted_MCRMSE
+
+    for epoch in range(config.epochs):
+        model.train(True)
+        total_loss = 0
+        optimizer.zero_grad()
+        step = 0
+        for data in train_loader:
+            step+=1
+            src=data['data'].to(device)
+            src = src[:, :, 0]
+            bpps=data['bpp'].to(device)
+            labels=data['labels'].to(device)
+            ew=data['ew'].to(device)
+            output=model(src,bpps)
+            loss=criterion(output[:,:68],labels,ew).mean()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+            optimizer.step()
+            optimizer.zero_grad()
+            total_loss+=loss
+
+        train_loss=total_loss/(step+1)
+        torch.cuda.empty_cache()
+
+        if (epoch+1)%config.val_freq==0:
+            val_loss=validate(model,device,val_dataloader,batch_size=config.batch_size)
+            print(f'Validation loss: {val_loss}') 
+
+        if (epoch+1)%config.save_freq==0:
+            save_weights(model,optimizer,epoch,checkpoints_folder)
+
+    print("finished!!")
+
+if __name__ == "__main__":
+    train()
