@@ -38,6 +38,11 @@ Set up accelerate with ```accelerate config``` in the terminal or with ```--conf
 
 For an example of a accelerate config file, see ```accelerate_config.yaml```
 
+```
+pjsub --interact -g gs58 -L "rscgrp=interactive-a,node=1" --sparam wait-time=30
+export PATH="/work/02/gs58/d58004/mambaforge/envs/torch/bin/:$PATH"
+accelerate launch run.py --config_path configs/pairwise.yaml
+```
 
 ### Training
 ```accelerate launch run.py --config_path configs/pairwise.yaml```

@@ -135,3 +135,6 @@ dmypy.json
 cython_debug/
 
 Ranger-Deep-Learning-Optimizer/
+.d000*
+*.p
+*.csv
