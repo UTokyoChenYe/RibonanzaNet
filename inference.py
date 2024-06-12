@@ -13,7 +13,7 @@ import json
 start_time = time.time()
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config_path', type=str, default="configs/pairwise.yaml")
+parser.add_argument('--config_path', type=str, default="configs/pairwise_chenye.yaml")
 
 args = parser.parse_args()
 
