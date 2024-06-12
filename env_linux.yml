@@ -1,4 +1,4 @@
-name: torch
+name: ribonanzanet
 channels:
   - defaults
 dependencies:
@@ -92,4 +92,4 @@ dependencies:
       - zipp==3.17.0
       - polars
       - matplotlib
-prefix: /home/shujun17/miniconda3/envs/torch
+prefix: /home/chenye/anaconda3/envs/torch
