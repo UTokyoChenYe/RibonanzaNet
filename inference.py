@@ -10,17 +10,21 @@ from accelerate import Accelerator
 import time
 import json
 
-start_time = time.time()
+# 设定开始时间，用于记录时间
+start_time = time.time() 
 
+# 用于传入参数，主要是配置文件，这个配置文件好像是全部的训练推理参数
 parser = argparse.ArgumentParser()
 parser.add_argument('--config_path', type=str, default="configs/pairwise_chenye.yaml")
-
 args = parser.parse_args()
 
+# 将配置文件读取出来
 config = load_config_from_yaml(args.config_path)
 
+# 构建用于加速训练+推理的加速器，来源于huggingface
 accelerator = Accelerator(mixed_precision='fp16')
 
+# 创建相关目录（但是这些目录的作用来不清楚，查到了之后记录一下）+ 添加GPU设备
 os.environ["CUDA_VISIBLE_DEVICES"]=config.gpu_id
 os.system('mkdir predictions')
 os.system('mkdir plots')
@@ -28,17 +32,24 @@ os.system('mkdir subs')
 
 #logger=CSVLogger(['epoch','train_loss','val_loss'],f'logs/fold{config.fold}.csv')
 
-data=pl.read_csv(f"{config.input_dir}/test_sequences.csv")
+# 这里我更换成了我的切分过的数据集
+#data=pl.read_csv(f"{config.input_dir}/test_sequences.csv")
+data = pl.read_csv(f"{config.input_dir}/chenye_try.csv") #chenye
+
+# 计算每个序列的长度并添加为新列，然后按序列长度排序
 lengths=data['sequence'].apply(len).to_list()
 data = data.with_columns(pl.Series('sequence_length',lengths))
 data = data.sort('sequence_length',descending=True)
 print(data['sequence_length'])
 #sample_sub=pd.read_csv(f"{config.input_dir}/sample_submission_arrayed.v1.0.3.csv")
 
+# 提取序列和序列ID
 test_ids=data['sequence_id'].to_list()
 sequences=data['sequence'].to_list()
 attention_mask=torch.tensor(get_distance_mask(max(lengths))).float()
 #sequence_ids=data.unique(subset=["sequence_id"],maintain_order=True)['sequence_id'].to_list()
+
+# 构建数据字典
 data_dict={'sequences':sequences,
            'sequence_ids': test_ids,
            "attention_mask":attention_mask}
@@ -46,6 +57,7 @@ assert len(test_ids)==len(data)
 #exit()
 #exit()
 
+# 创建测试数据集和数据加载器
 val_dataset=TestRNAdataset(np.arange(len(data)),data_dict,k=config.k)
 val_loader=DataLoader(val_dataset,batch_size=config.test_batch_size,shuffle=False,
                         collate_fn=Custom_Collate_Obj_test(),num_workers=min(config.batch_size,32))
@@ -53,16 +65,18 @@ val_loader=DataLoader(val_dataset,batch_size=config.test_batch_size,shuffle=Fals
 # val_dataset[0]
 # exit()
 print(accelerator.distributed_type)
-models=[]
 
+# 加载模型，并设置为评估模式
+models=[]
 for i in range(1):
     model=RibonanzaNet(config)#.cuda()
     model.eval()
     model.load_state_dict(torch.load(f"models/model{i}.pt",map_location='cpu'))
+    model.load_state_dict(torch.load(f"./models/model{i}.pt",map_location='gpu'))
     models.append(model)
 
 #exit()
-
+# 使用加速器准备模型和数据加载器
 model, val_loader= accelerator.prepare(
     model, val_loader
 )
@@ -70,6 +84,8 @@ model, val_loader= accelerator.prepare(
 #print(val_dataset.max_len)
 # print(attention_mask.device)
 # exit()
+
+# 开始进行推理
 tbar = tqdm(val_loader)
 val_loss=0
 preds=[]
@@ -79,6 +95,7 @@ for idx, batch in enumerate(tbar):
     masks=batch['masks']#.bool().cuda()
     bs=len(src)
 
+    # 创建反转序列，但是为什么？数据增强吗？
     src_flipped=src.clone()
 
 
@@ -108,6 +125,7 @@ for idx, batch in enumerate(tbar):
     all_output = accelerator.gather(output).cpu().numpy()
     preds.append(all_output)
 
+# 如果是主进程，保存预测结果和推理统计信息
 if accelerator.is_local_main_process:
     import pickle
 
@@ -118,11 +136,14 @@ if accelerator.is_local_main_process:
         in_batch_index=i%(config.test_batch_size*accelerator.num_processes)
         preds_dict[id]=preds[batch_number][in_batch_index]
 
+    # 记录预测的值，序列化写入pickle的值
     with open("preds.p",'wb+') as f:
         pickle.dump(preds_dict,f)
 
+    # 计算推理时间
     end_time = time.time()
     elapsed_time = end_time - start_time
 
+    # 将推理时间写入json文件
     with open("inference_stats.json", 'w') as file:
             json.dump({'Total_execution_time': elapsed_time}, file, indent=4)
